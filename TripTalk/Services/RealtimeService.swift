@@ -17,20 +17,12 @@ final class RealtimeService {
     
     /// クライアントシークレットレスポンス
     struct ClientSecretResponse: Codable {
-        let clientSecret: ClientSecret
+        let value: String
+        let expiresAt: Int
         
         enum CodingKeys: String, CodingKey {
-            case clientSecret = "client_secret"
-        }
-        
-        struct ClientSecret: Codable {
-            let value: String
-            let expiresAt: Int
-            
-            enum CodingKeys: String, CodingKey {
-                case value
-                case expiresAt = "expires_at"
-            }
+            case value
+            case expiresAt = "expires_at"
         }
     }
     
@@ -154,7 +146,7 @@ final class RealtimeService {
             }
             
             let decoded = try JSONDecoder().decode(ClientSecretResponse.self, from: data)
-            return decoded.clientSecret.value
+            return decoded.value
             
         } catch let error as RealtimeError {
             throw error
