@@ -193,24 +193,39 @@ class TranslationViewModel {
     }
     
     private func handleConnectionError(_ error: Error) {
+        // APIキーエラーやレート制限は再接続しない
+        if let realtimeError = error as? RealtimeService.RealtimeError {
+            switch realtimeError {
+            case .noAPIKey:
+                connectionState = .error(Constants.ErrorMessage.invalidAPIKey)
+                return
+            case .httpError(let code, _):
+                if code == 401 {
+                    connectionState = .error(Constants.ErrorMessage.invalidAPIKey)
+                    return
+                } else if code == 429 {
+                    connectionState = .error(Constants.ErrorMessage.rateLimitExceeded)
+                    return
+                }
+            default:
+                break
+            }
+        }
+        
         // 再接続を試みる
         if reconnectAttempts < Constants.API.maxReconnectAttempts {
             reconnectAttempts += 1
             connectionState = .reconnecting
             
+            // 指数バックオフで再接続
+            let delay = Double(reconnectAttempts) * 1.5
             Task {
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: .seconds(delay))
                 await connectToRealtimeAPI()
             }
         } else {
             // 再接続失敗
-            if let realtimeError = error as? RealtimeService.RealtimeError {
-                connectionState = .error(realtimeError.localizedDescription)
-            } else if let webrtcError = error as? WebRTCError {
-                connectionState = .error(webrtcError.localizedDescription)
-            } else {
-                connectionState = .error(Constants.ErrorMessage.connectionFailed)
-            }
+            connectionState = .error(Constants.ErrorMessage.reconnectFailed)
         }
     }
     
@@ -350,10 +365,25 @@ extension TranslationViewModel: WebRTCClientDelegate {
             
         case "error":
             // エラーイベント
-            if let errorData = event["error"] as? [String: Any],
-               let message = errorData["message"] as? String {
-                print("[TranslationViewModel] API Error: \(message)")
-                // 致命的なエラーでない場合は表示のみ
+            if let errorData = event["error"] as? [String: Any] {
+                let message = errorData["message"] as? String ?? "不明なエラー"
+                let code = errorData["code"] as? String ?? ""
+                
+                print("[TranslationViewModel] API Error: \(code) - \(message)")
+                
+                // エラーコードに基づいて処理
+                switch code {
+                case "rate_limit_exceeded":
+                    connectionState = .error(Constants.ErrorMessage.rateLimitExceeded)
+                case "invalid_api_key", "authentication_error":
+                    connectionState = .error(Constants.ErrorMessage.invalidAPIKey)
+                case "server_error":
+                    // サーバーエラーは再接続を試みる
+                    handleConnectionError(WebRTCError.connectionFailed)
+                default:
+                    // 一時的なエラーは表示のみ、セッションは維持
+                    print("[TranslationViewModel] Non-fatal error: \(message)")
+                }
             }
             
         default:
