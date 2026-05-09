@@ -151,9 +151,11 @@ final class WebRTCClient: NSObject {
     private func configureAudioSession() throws {
         try audioSession.setCategory(
             .playAndRecord,
-            mode: .voiceChat,
+            mode: .spokenAudio,  // スピーカー出力を優先
             options: [.defaultToSpeaker, .allowBluetooth]
         )
+        // スピーカーに出力をルーティング（音量最大化）
+        try audioSession.overrideOutputAudioPort(.speaker)
         try audioSession.setActive(true)
     }
     

@@ -59,14 +59,16 @@ final class AudioService {
     func configureAudioSession() throws {
         try audioSession.setCategory(
             .playAndRecord,
-            mode: .voiceChat,
+            mode: .spokenAudio,  // voiceChatよりスピーカー出力に適している
             options: [
                 .defaultToSpeaker,
                 .allowBluetooth,
-                .allowBluetoothA2DP,
-                .mixWithOthers
+                .allowBluetoothA2DP
             ]
         )
+        
+        // スピーカーに出力をルーティング
+        try audioSession.overrideOutputAudioPort(.speaker)
         
         // 低遅延設定
         try audioSession.setPreferredIOBufferDuration(0.005)
