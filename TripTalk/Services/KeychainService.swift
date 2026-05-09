@@ -42,7 +42,25 @@ final class KeychainService {
     }
     
     /// APIキーを取得
+    /// Keychainから取得を試み、なければ開発時は.envから読み込む
     func getAPIKey() -> String? {
+        // まずKeychainから取得を試みる
+        if let keychainKey = getAPIKeyFromKeychain() {
+            return keychainKey
+        }
+        
+        // 開発時のみ.envから読み込む
+        #if DEBUG
+        if let envKey = DevelopmentConfig.loadAPIKeyFromEnv() {
+            return envKey
+        }
+        #endif
+        
+        return nil
+    }
+    
+    /// Keychainから直接APIキーを取得（内部用）
+    private func getAPIKeyFromKeychain() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,

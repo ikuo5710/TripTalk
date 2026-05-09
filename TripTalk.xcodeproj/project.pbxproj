@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		1E9EA9C22FAECA2B0070707A /* CLAUDE.md in Resources */ = {isa = PBXBuildFile; fileRef = 1E9EA9C12FAECA210070707A /* CLAUDE.md */; };
 		1E9EA9C42FAECB390070707A /* PLAN.md in Resources */ = {isa = PBXBuildFile; fileRef = 1E9EA9C32FAECB390070707A /* PLAN.md */; };
+		1E9EAA272FAED1DA0070707A /* .env in Resources */ = {isa = PBXBuildFile; fileRef = 1E9EAA262FAED1D50070707A /* .env */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,7 +35,7 @@
 		1E9EA9AE2FAEC9ED0070707A /* TripTalkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TripTalkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1E9EA9C12FAECA210070707A /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
 		1E9EA9C32FAECB390070707A /* PLAN.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PLAN.md; sourceTree = "<group>"; };
-		1E9EAA212FAED0D80070707A /* Untitled.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Untitled.swift; sourceTree = "<group>"; };
+		1E9EAA262FAED1D50070707A /* .env */ = {isa = PBXFileReference; lastKnownFileType = text; path = .env; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -89,7 +90,7 @@
 				1E9EA9B12FAEC9ED0070707A /* TripTalkUITests */,
 				1E9EA9962FAEC9EC0070707A /* Products */,
 				1E9EA9C32FAECB390070707A /* PLAN.md */,
-				1E9EAA212FAED0D80070707A /* Untitled.swift */,
+				1E9EAA262FAED1D50070707A /* .env */,
 			);
 			sourceTree = "<group>";
 		};
@@ -223,6 +224,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1E9EAA272FAED1DA0070707A /* .env in Resources */,
 				1E9EA9C42FAECB390070707A /* PLAN.md in Resources */,
 				1E9EA9C22FAECA2B0070707A /* CLAUDE.md in Resources */,
 			);
