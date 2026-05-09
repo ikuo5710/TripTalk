@@ -38,6 +38,37 @@ class TranslationViewModel {
     private var currentTranscriptId: UUID?
     private var reconnectAttempts = 0
     private var audioPlaybackTimer: Timer?
+    private var backgroundObserver: NSObjectProtocol?
+    
+    // MARK: - Initialization
+    
+    init() {
+        setupBackgroundObserver()
+    }
+    
+    deinit {
+        // Note: backgroundObserverはMainActorで管理されるため、
+        // NotificationCenterが自動的にクリーンアップを行う
+    }
+    
+    private func setupBackgroundObserver() {
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: .appDidEnterBackground,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleAppDidEnterBackground()
+        }
+    }
+    
+    private func handleAppDidEnterBackground() {
+        // バックグラウンドに移行したらマイク入力を停止
+        // セッションは維持するが、音声送信は停止
+        if connectionState.isSessionActive {
+            webRTCClient?.pauseAudio()
+            // 状態は変更しない（フォアグラウンド復帰時に自動再開しないため）
+        }
+    }
     
     // MARK: - Computed Properties
     
