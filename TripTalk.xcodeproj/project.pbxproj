@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		1E9EA9C22FAECA2B0070707A /* CLAUDE.md in Resources */ = {isa = PBXBuildFile; fileRef = 1E9EA9C12FAECA210070707A /* CLAUDE.md */; };
+		1E9EA9C42FAECB390070707A /* PLAN.md in Resources */ = {isa = PBXBuildFile; fileRef = 1E9EA9C32FAECB390070707A /* PLAN.md */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		1E9EA9A52FAEC9ED0070707A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +32,8 @@
 		1E9EA9952FAEC9EC0070707A /* TripTalk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TripTalk.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1E9EA9A42FAEC9ED0070707A /* TripTalkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TripTalkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1E9EA9AE2FAEC9ED0070707A /* TripTalkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TripTalkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1E9EA9C12FAECA210070707A /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
+		1E9EA9C32FAECB390070707A /* PLAN.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PLAN.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,10 +82,12 @@
 		1E9EA98C2FAEC9EC0070707A = {
 			isa = PBXGroup;
 			children = (
+				1E9EA9C12FAECA210070707A /* CLAUDE.md */,
 				1E9EA9972FAEC9EC0070707A /* TripTalk */,
 				1E9EA9A72FAEC9ED0070707A /* TripTalkTests */,
 				1E9EA9B12FAEC9ED0070707A /* TripTalkUITests */,
 				1E9EA9962FAEC9EC0070707A /* Products */,
+				1E9EA9C32FAECB390070707A /* PLAN.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -212,6 +221,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1E9EA9C42FAECB390070707A /* PLAN.md in Resources */,
+				1E9EA9C22FAECA2B0070707A /* CLAUDE.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
