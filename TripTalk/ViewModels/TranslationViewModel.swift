@@ -19,9 +19,21 @@ class TranslationViewModel {
     var connectionState: ConnectionState = .idle
     var translationEntries: [TranslationEntry] = []
     
+    /// 音声ミュート状態
+    var isMuted: Bool = false {
+        didSet {
+            webRTCClient?.setRemoteAudioMuted(isMuted)
+            AudioService.shared.isMuted = isMuted
+        }
+    }
+    
+    /// 音声再生中かどうか
+    var isPlayingAudio: Bool = false
+    
     private var webRTCClient: WebRTCClient?
     private var currentTranscriptId: UUID?
     private var reconnectAttempts = 0
+    private var audioPlaybackTimer: Timer?
     
     // MARK: - Computed Properties
     
@@ -73,6 +85,9 @@ class TranslationViewModel {
     
     /// 終了
     func stopTranslation() {
+        audioPlaybackTimer?.invalidate()
+        audioPlaybackTimer = nil
+        isPlayingAudio = false
         webRTCClient?.disconnect()
         webRTCClient = nil
         connectionState = .idle
@@ -178,6 +193,27 @@ class TranslationViewModel {
             translationEntries.append(entry)
         }
     }
+    
+    // MARK: - Audio Playback Handling
+    
+    /// 音声再生終了を処理
+    private func handleAudioPlaybackEnded() {
+        audioPlaybackTimer?.invalidate()
+        audioPlaybackTimer = nil
+        isPlayingAudio = false
+        webRTCClient?.resumeMicAfterPlayback()
+    }
+    
+    /// 音声再生タイマーをリセット（チャンク受信ごとに呼ばれる）
+    private func resetAudioPlaybackTimer() {
+        audioPlaybackTimer?.invalidate()
+        // 500ms以上音声チャンクが来なければ再生終了と判断
+        audioPlaybackTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleAudioPlaybackEnded()
+            }
+        }
+    }
 }
 
 // MARK: - WebRTCClientDelegate
@@ -250,9 +286,24 @@ extension TranslationViewModel: WebRTCClientDelegate {
             // 入力テキストの増分（仕様上は表示しない）
             break
             
+        case "session.output_audio.started":
+            // 翻訳音声再生開始 - マイクを一時停止（回り込み防止）
+            isPlayingAudio = true
+            webRTCClient?.pauseMicForPlayback()
+            
         case "session.output_audio.delta":
             // 翻訳音声のチャンク（WebRTCが自動処理）
-            break
+            // 再生中フラグを維持
+            if !isPlayingAudio {
+                isPlayingAudio = true
+                webRTCClient?.pauseMicForPlayback()
+            }
+            // タイマーをリセット（音声チャンクが来たら再生中と判断）
+            resetAudioPlaybackTimer()
+            
+        case "session.output_audio.done":
+            // 翻訳音声再生終了 - マイクを再開
+            handleAudioPlaybackEnded()
             
         case "error":
             // エラーイベント

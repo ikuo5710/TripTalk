@@ -27,6 +27,12 @@ final class WebRTCClient: NSObject {
     private(set) var isConnected = false
     private var clientSecret: String?
     
+    /// 音声再生中のマイク一時停止フラグ
+    private var isMicPausedForPlayback = false
+    
+    /// ユーザーによる手動一時停止フラグ
+    private var isUserPaused = false
+    
     // MARK: - Initialization
     
     override init() {
@@ -96,14 +102,48 @@ final class WebRTCClient: NSObject {
         delegate?.webRTCClientDidDisconnect(self)
     }
     
-    /// マイク入力を一時停止
+    /// マイク入力を一時停止（ユーザー操作）
     func pauseAudio() {
+        isUserPaused = true
         localAudioTrack?.isEnabled = false
     }
     
-    /// マイク入力を再開
+    /// マイク入力を再開（ユーザー操作）
     func resumeAudio() {
-        localAudioTrack?.isEnabled = true
+        isUserPaused = false
+        // 再生中でなければマイクを有効化
+        if !isMicPausedForPlayback {
+            localAudioTrack?.isEnabled = true
+        }
+    }
+    
+    /// 音声再生開始時のマイク一時停止（回り込み防止）
+    func pauseMicForPlayback() {
+        guard !isMicPausedForPlayback else { return }
+        isMicPausedForPlayback = true
+        localAudioTrack?.isEnabled = false
+        AudioService.shared.notifyRemoteAudioStarted()
+    }
+    
+    /// 音声再生終了時のマイク再開（回り込み防止）
+    func resumeMicAfterPlayback() {
+        guard isMicPausedForPlayback else { return }
+        isMicPausedForPlayback = false
+        AudioService.shared.notifyRemoteAudioStopped()
+        // ユーザーが手動で一時停止していなければマイクを有効化
+        if !isUserPaused {
+            localAudioTrack?.isEnabled = true
+        }
+    }
+    
+    /// リモート音声のミュート状態を設定
+    func setRemoteAudioMuted(_ muted: Bool) {
+        remoteAudioTrack?.isEnabled = !muted
+    }
+    
+    /// リモート音声が有効かどうか
+    var isRemoteAudioEnabled: Bool {
+        remoteAudioTrack?.isEnabled ?? false
     }
     
     // MARK: - Private Methods
