@@ -96,7 +96,7 @@ struct TranslationEntryRow: View {
     }
     
     private var separatorView: some View {
-        HStack(spacing: 12) {
+        VStack(spacing: 8) {
             Rectangle()
                 .fill(Color(.separator))
                 .frame(height: 1)
@@ -104,7 +104,6 @@ struct TranslationEntryRow: View {
             Text(entry.text)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             
