@@ -29,7 +29,10 @@ struct MainView: View {
                 Divider()
                 
                 // 翻訳履歴
-                TranslationHistoryView(entries: viewModel.translationEntries)
+                TranslationHistoryView(
+                    entries: viewModel.translationEntries,
+                    isTranslating: viewModel.connectionState.isTranslating
+                )
                 
                 Divider()
                 
