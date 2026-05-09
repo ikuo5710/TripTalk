@@ -23,9 +23,9 @@ struct TripTalkTests {
     }
     
     @Test func languageAPINnames() {
-        #expect(Language.japanese.apiName == "Japanese")
-        #expect(Language.english.apiName == "English")
-        #expect(Language.chinese.apiName == "Chinese")
+        #expect(Language.japanese.apiCode == "ja")
+        #expect(Language.english.apiCode == "en")
+        #expect(Language.chinese.apiCode == "zh")
     }
     
     // MARK: - ConnectionState Tests

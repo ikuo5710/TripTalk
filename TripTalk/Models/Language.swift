@@ -44,22 +44,8 @@ enum Language: String, CaseIterable, Identifiable {
         }
     }
     
-    /// OpenAI API用の言語名
-    var apiName: String {
-        switch self {
-        case .spanish: return "Spanish"
-        case .portuguese: return "Portuguese"
-        case .french: return "French"
-        case .japanese: return "Japanese"
-        case .russian: return "Russian"
-        case .chinese: return "Chinese"
-        case .german: return "German"
-        case .korean: return "Korean"
-        case .hindi: return "Hindi"
-        case .indonesian: return "Indonesian"
-        case .vietnamese: return "Vietnamese"
-        case .italian: return "Italian"
-        case .english: return "English"
-        }
+    /// OpenAI API用の言語コード（ISO 639-1）
+    var apiCode: String {
+        rawValue  // es, pt, fr, ja, ru, zh, de, ko, hi, id, vi, it, en
     }
 }

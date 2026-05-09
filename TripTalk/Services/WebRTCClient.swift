@@ -60,7 +60,7 @@ final class WebRTCClient: NSObject {
     /// - Parameter outputLanguage: 出力言語
     func connect(outputLanguage: Language) async throws {
         // 1. クライアントシークレットを取得
-        let secret = try await RealtimeService.shared.getClientSecret(outputLanguage: outputLanguage.apiName)
+        let secret = try await RealtimeService.shared.getClientSecret(outputLanguage: outputLanguage.apiCode)
         self.clientSecret = secret
         
         // 2. オーディオセッションを設定

@@ -101,7 +101,7 @@ final class RealtimeService {
     // MARK: - Public Methods
     
     /// クライアントシークレットを取得（翻訳セッション用）
-    /// - Parameter outputLanguage: 出力言語（例: "Japanese", "English"）
+    /// - Parameter outputLanguage: 出力言語コード（例: "ja", "en"）
     /// - Returns: クライアントシークレット
     func getClientSecret(outputLanguage: String) async throws -> String {
         guard let apiKey = KeychainService.shared.getAPIKey() else {
@@ -128,7 +128,7 @@ final class RealtimeService {
                     )
                 ),
                 output: SessionConfig.AudioConfig.OutputConfig(
-                    language: outputLanguage.lowercased()
+                    language: outputLanguage  // Already lowercase ISO 639-1 code
                 )
             )
         )
