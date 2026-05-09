@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Observation
+import AVFoundation
 
 /// 翻訳画面のViewModel
 @MainActor
@@ -29,6 +30,9 @@ class TranslationViewModel {
     
     /// 音声再生中かどうか
     var isPlayingAudio: Bool = false
+    
+    /// マイク権限が必要なダイアログを表示
+    var showMicrophonePermissionAlert: Bool = false
     
     private var webRTCClient: WebRTCClient?
     private var currentTranscriptId: UUID?
@@ -61,11 +65,50 @@ class TranslationViewModel {
             return
         }
         
+        // マイク権限をチェック
+        Task {
+            await checkMicrophonePermissionAndStart()
+        }
+    }
+    
+    /// マイク権限をチェックして翻訳開始
+    private func checkMicrophonePermissionAndStart() async {
+        let permission = AudioService.shared.checkMicrophonePermission()
+        
+        switch permission {
+        case .undetermined:
+            // 権限をリクエスト
+            let granted = await AudioService.shared.requestMicrophonePermission()
+            if granted {
+                await startTranslationSession()
+            } else {
+                showMicrophonePermissionAlert = true
+            }
+            
+        case .denied:
+            // 権限が拒否されている
+            showMicrophonePermissionAlert = true
+            
+        case .granted:
+            // 権限あり - 翻訳開始
+            await startTranslationSession()
+            
+        @unknown default:
+            showMicrophonePermissionAlert = true
+        }
+    }
+    
+    /// 翻訳セッションを開始
+    private func startTranslationSession() async {
         connectionState = .connecting
         reconnectAttempts = 0
-        
-        Task {
-            await connectToRealtimeAPI()
+        await connectToRealtimeAPI()
+    }
+    
+    /// 設定アプリを開く
+    func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
         }
     }
     

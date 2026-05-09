@@ -13,10 +13,10 @@ struct SettingsView: View {
     
     @State private var apiKey: String = ""
     @State private var savedAPIKey: String = ""
-    @State private var selectedVoice: VoiceType = .alloy
-    @State private var speechRate: Double = 1.0
-    @State private var volume: Double = 1.0
-    @State private var isMuted: Bool = false
+    @AppStorage("selectedVoice") private var selectedVoice: VoiceType = .alloy
+    @AppStorage("speechRate") private var speechRate: Double = 1.0
+    @AppStorage("volume") private var volume: Double = 1.0
+    @AppStorage("isMuted") private var isMuted: Bool = false
     @State private var showDeleteConfirmation = false
     
     var body: some View {
@@ -154,7 +154,7 @@ struct SettingsView: View {
     
     private func loadSettings() {
         savedAPIKey = KeychainService.shared.getAPIKey() ?? ""
-        // TODO: UserDefaultsから他の設定を読み込む
+        // AppStorageで自動的に読み込まれる
     }
     
     private func saveAPIKey() {
@@ -170,7 +170,7 @@ struct SettingsView: View {
 }
 
 /// 声質タイプ
-enum VoiceType: String, CaseIterable, Identifiable {
+enum VoiceType: String, CaseIterable, Identifiable, RawRepresentable {
     case alloy
     case ash
     case ballad
@@ -183,7 +183,16 @@ enum VoiceType: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     
     var displayName: String {
-        rawValue.capitalized
+        switch self {
+        case .alloy: return "Alloy（中性的）"
+        case .ash: return "Ash（落ち着いた）"
+        case .ballad: return "Ballad（穏やか）"
+        case .coral: return "Coral（明るい）"
+        case .echo: return "Echo（柔らかい）"
+        case .sage: return "Sage（知的）"
+        case .shimmer: return "Shimmer（輝く）"
+        case .verse: return "Verse（詩的）"
+        }
     }
 }
 

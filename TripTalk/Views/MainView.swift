@@ -65,6 +65,14 @@ struct MainView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
+            .alert("マイクの許可が必要です", isPresented: $viewModel.showMicrophonePermissionAlert) {
+                Button("設定を開く") {
+                    viewModel.openSettings()
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("音声を翻訳するには、マイクへのアクセスを許可してください。設定アプリでマイクをオンにすると、翻訳を開始できます。")
+            }
             .onAppear {
                 viewModel.checkAPIKeyAndShowSettingsIfNeeded(showSettings: $showSettings)
             }
@@ -106,6 +114,13 @@ struct MainView: View {
     
     private var toolbarLeadingItems: some View {
         HStack(spacing: 16) {
+            // ミュートボタン
+            Button {
+                viewModel.isMuted.toggle()
+            } label: {
+                Image(systemName: viewModel.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+            }
+            
             Button {
                 viewModel.copyAllText()
             } label: {
