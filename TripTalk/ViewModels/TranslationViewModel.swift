@@ -245,6 +245,9 @@ class TranslationViewModel {
             
             try await client.connect(outputLanguage: outputLanguage)
             
+            // 現在のミュート状態を新しいセッションに反映
+            client.setRemoteAudioMuted(isMuted)
+            
             connectionState = .translating
             
         } catch {
