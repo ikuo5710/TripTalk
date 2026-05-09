@@ -19,6 +19,10 @@ class TranslationViewModel {
     var connectionState: ConnectionState = .idle
     var translationEntries: [TranslationEntry] = []
     
+    private var webRTCClient: WebRTCClient?
+    private var currentTranscriptId: UUID?
+    private var reconnectAttempts = 0
+    
     // MARK: - Computed Properties
     
     /// 全翻訳テキスト（コピー/共有用）
@@ -46,12 +50,10 @@ class TranslationViewModel {
         }
         
         connectionState = .connecting
+        reconnectAttempts = 0
         
-        // TODO: フェーズ4で実際のWebRTC接続とマイク入力開始を実装
-        // 仮実装：接続完了をシミュレート
         Task {
-            try? await Task.sleep(for: .seconds(1))
-            connectionState = .translating
+            await connectToRealtimeAPI()
         }
     }
     
@@ -59,21 +61,23 @@ class TranslationViewModel {
     func pauseTranslation() {
         guard connectionState.isTranslating else { return }
         connectionState = .paused
-        // TODO: フェーズ5でマイク入力を停止（セッションは維持）
+        webRTCClient?.pauseAudio()
     }
     
     /// 再開
     func resumeTranslation() {
         guard connectionState == .paused else { return }
         connectionState = .translating
-        // TODO: フェーズ5でマイク入力を再開
+        webRTCClient?.resumeAudio()
     }
     
     /// 終了
     func stopTranslation() {
+        webRTCClient?.disconnect()
+        webRTCClient = nil
         connectionState = .idle
         translationEntries.removeAll()
-        // TODO: フェーズ4/5でWebRTCセッション切断、マイク・音声停止
+        currentTranscriptId = nil
     }
     
     /// 言語入れ替え
@@ -81,7 +85,7 @@ class TranslationViewModel {
         let oldInput = inputLanguage
         let oldOutput = outputLanguage
         
-        // セッションがアクティブな場合は区切り行を追加
+        // セッションがアクティブな場合は区切り行を追加してセッション再作成
         if connectionState.isSessionActive {
             let separator = TranslationEntry.separator(
                 from: oldInput,
@@ -91,11 +95,20 @@ class TranslationViewModel {
             )
             translationEntries.append(separator)
             
-            // TODO: フェーズ4でセッション再作成
+            // 言語を入れ替え
+            inputLanguage = oldOutput
+            outputLanguage = oldInput
+            
+            // セッション再作成
+            Task {
+                webRTCClient?.disconnect()
+                connectionState = .connecting
+                await connectToRealtimeAPI()
+            }
+        } else {
+            inputLanguage = oldOutput
+            outputLanguage = oldInput
         }
-        
-        inputLanguage = oldOutput
-        outputLanguage = oldInput
     }
     
     /// 全テキストをコピー
@@ -103,10 +116,50 @@ class TranslationViewModel {
         UIPasteboard.general.string = allTranslationText
     }
     
-    // MARK: - Translation Event Handlers (フェーズ4以降で使用)
+    // MARK: - Private Methods
+    
+    private func connectToRealtimeAPI() async {
+        do {
+            let client = WebRTCClient()
+            client.delegate = self
+            self.webRTCClient = client
+            
+            try await client.connect(outputLanguage: outputLanguage)
+            
+            connectionState = .translating
+            
+        } catch {
+            print("[TranslationViewModel] Connection error: \(error)")
+            handleConnectionError(error)
+        }
+    }
+    
+    private func handleConnectionError(_ error: Error) {
+        // 再接続を試みる
+        if reconnectAttempts < Constants.API.maxReconnectAttempts {
+            reconnectAttempts += 1
+            connectionState = .reconnecting
+            
+            Task {
+                try? await Task.sleep(for: .seconds(1))
+                await connectToRealtimeAPI()
+            }
+        } else {
+            // 再接続失敗
+            if let realtimeError = error as? RealtimeService.RealtimeError {
+                connectionState = .error(realtimeError.localizedDescription)
+            } else if let webrtcError = error as? WebRTCError {
+                connectionState = .error(webrtcError.localizedDescription)
+            } else {
+                connectionState = .error(Constants.ErrorMessage.connectionFailed)
+            }
+        }
+    }
+    
+    // MARK: - Translation Event Handlers
     
     /// 中間翻訳結果を受信
-    func receiveIntermediateTranslation(_ text: String, id: UUID) {
+    private func receiveIntermediateTranslation(_ text: String, id: UUID) {
         if let index = translationEntries.firstIndex(where: { $0.id == id }) {
             translationEntries[index].text = text
         } else {
@@ -116,13 +169,101 @@ class TranslationViewModel {
     }
     
     /// 確定翻訳結果を受信
-    func receiveFinalTranslation(_ text: String, id: UUID) {
+    private func receiveFinalTranslation(_ text: String, id: UUID) {
         if let index = translationEntries.firstIndex(where: { $0.id == id }) {
             translationEntries[index].text = text
             translationEntries[index].isIntermediate = false
         } else {
             let entry = TranslationEntry(id: id, text: text, isIntermediate: false)
             translationEntries.append(entry)
+        }
+    }
+}
+
+// MARK: - WebRTCClientDelegate
+
+extension TranslationViewModel: WebRTCClientDelegate {
+    nonisolated func webRTCClient(_ client: WebRTCClient, didReceiveData data: Data) {
+        // 生データの処理（必要に応じて）
+    }
+    
+    nonisolated func webRTCClient(_ client: WebRTCClient, didReceiveEvent event: [String: Any]) {
+        Task { @MainActor in
+            handleRealtimeEvent(event)
+        }
+    }
+    
+    nonisolated func webRTCClientDidConnect(_ client: WebRTCClient) {
+        Task { @MainActor in
+            connectionState = .translating
+            reconnectAttempts = 0
+        }
+    }
+    
+    nonisolated func webRTCClientDidDisconnect(_ client: WebRTCClient) {
+        Task { @MainActor in
+            if connectionState.isSessionActive {
+                // 予期せぬ切断 - 再接続を試みる
+                handleConnectionError(WebRTCError.connectionFailed)
+            }
+        }
+    }
+    
+    nonisolated func webRTCClient(_ client: WebRTCClient, didEncounterError error: Error) {
+        Task { @MainActor in
+            handleConnectionError(error)
+        }
+    }
+    
+    // MARK: - Event Handling
+    
+    private func handleRealtimeEvent(_ event: [String: Any]) {
+        guard let type = event["type"] as? String else { return }
+        
+        switch type {
+        case "session.output_transcript.delta":
+            // 翻訳テキストの増分
+            if let delta = event["delta"] as? String {
+                let id = currentTranscriptId ?? UUID()
+                if currentTranscriptId == nil {
+                    currentTranscriptId = id
+                }
+                
+                // 既存のエントリを更新または新規作成
+                if let index = translationEntries.firstIndex(where: { $0.id == id }) {
+                    translationEntries[index].text += delta
+                } else {
+                    receiveIntermediateTranslation(delta, id: id)
+                }
+            }
+            
+        case "session.output_transcript.done":
+            // 翻訳テキスト確定
+            if let id = currentTranscriptId {
+                if let index = translationEntries.firstIndex(where: { $0.id == id }) {
+                    translationEntries[index].isIntermediate = false
+                }
+            }
+            currentTranscriptId = nil
+            
+        case "session.input_transcript.delta":
+            // 入力テキストの増分（仕様上は表示しない）
+            break
+            
+        case "session.output_audio.delta":
+            // 翻訳音声のチャンク（WebRTCが自動処理）
+            break
+            
+        case "error":
+            // エラーイベント
+            if let errorData = event["error"] as? [String: Any],
+               let message = errorData["message"] as? String {
+                print("[TranslationViewModel] API Error: \(message)")
+                // 致命的なエラーでない場合は表示のみ
+            }
+            
+        default:
+            print("[TranslationViewModel] Unknown event type: \(type)")
         }
     }
 }

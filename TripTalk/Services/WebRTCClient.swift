@@ -6,53 +6,330 @@
 //
 
 import Foundation
+import WebRTC
+import AVFoundation
 
-/// WebRTCクライアント
-/// フェーズ4で本格実装予定
-final class WebRTCClient {
-    
-    // MARK: - Delegate Protocol
-    
-    weak var delegate: WebRTCClientDelegate?
+/// WebRTCクライアント - OpenAI Realtime Translation APIとの接続を管理
+final class WebRTCClient: NSObject {
     
     // MARK: - Properties
     
-    private var isConnected = false
+    weak var delegate: WebRTCClientDelegate?
+    
+    private var peerConnection: RTCPeerConnection?
+    private var dataChannel: RTCDataChannel?
+    private var localAudioTrack: RTCAudioTrack?
+    private var remoteAudioTrack: RTCAudioTrack?
+    
+    private let factory: RTCPeerConnectionFactory
+    private let audioSession = AVAudioSession.sharedInstance()
+    
+    private(set) var isConnected = false
+    private var clientSecret: String?
+    
+    // MARK: - Initialization
+    
+    override init() {
+        // WebRTC初期化
+        RTCInitializeSSL()
+        
+        let encoderFactory = RTCDefaultVideoEncoderFactory()
+        let decoderFactory = RTCDefaultVideoDecoderFactory()
+        self.factory = RTCPeerConnectionFactory(
+            encoderFactory: encoderFactory,
+            decoderFactory: decoderFactory
+        )
+        
+        super.init()
+    }
+    
+    deinit {
+        disconnect()
+        RTCCleanupSSL()
+    }
     
     // MARK: - Public Methods
     
-    /// 接続を開始
-    func connect(token: String) async throws {
-        // TODO: フェーズ4で実装
-        // - RTCPeerConnection設定
-        // - SDP Offer/Answer交換
-        // - ICE Candidate処理
-        // - DataChannel設定
-        // - Audio Track設定
+    /// 翻訳セッションに接続
+    /// - Parameter outputLanguage: 出力言語
+    func connect(outputLanguage: Language) async throws {
+        // 1. クライアントシークレットを取得
+        let secret = try await RealtimeService.shared.getClientSecret(outputLanguage: outputLanguage.apiName)
+        self.clientSecret = secret
+        
+        // 2. オーディオセッションを設定
+        try configureAudioSession()
+        
+        // 3. PeerConnectionを作成
+        try createPeerConnection()
+        
+        // 4. データチャネルを作成
+        createDataChannel()
+        
+        // 5. ローカルオーディオトラックを追加
+        addLocalAudioTrack()
+        
+        // 6. SDPオファーを作成して送信
+        try await negotiateConnection(clientSecret: secret)
+        
+        isConnected = true
+        
+        await MainActor.run {
+            delegate?.webRTCClientDidConnect(self)
+        }
     }
     
     /// 接続を切断
     func disconnect() {
-        // TODO: フェーズ4で実装
+        dataChannel?.close()
+        dataChannel = nil
+        
+        peerConnection?.close()
+        peerConnection = nil
+        
+        localAudioTrack = nil
+        remoteAudioTrack = nil
+        
         isConnected = false
+        clientSecret = nil
+        
+        delegate?.webRTCClientDidDisconnect(self)
     }
     
-    /// データを送信
-    func send(data: Data) {
-        // TODO: フェーズ4で実装
+    /// マイク入力を一時停止
+    func pauseAudio() {
+        localAudioTrack?.isEnabled = false
     }
     
-    /// イベントを送信
-    func sendEvent(_ event: [String: Any]) {
-        // TODO: フェーズ4で実装
+    /// マイク入力を再開
+    func resumeAudio() {
+        localAudioTrack?.isEnabled = true
+    }
+    
+    // MARK: - Private Methods
+    
+    private func configureAudioSession() throws {
+        try audioSession.setCategory(
+            .playAndRecord,
+            mode: .voiceChat,
+            options: [.defaultToSpeaker, .allowBluetooth]
+        )
+        try audioSession.setActive(true)
+    }
+    
+    private func createPeerConnection() throws {
+        let config = RTCConfiguration()
+        config.sdpSemantics = .unifiedPlan
+        config.continualGatheringPolicy = .gatherContinually
+        
+        // ICEサーバーは不要（OpenAIが処理）
+        config.iceServers = []
+        
+        let constraints = RTCMediaConstraints(
+            mandatoryConstraints: nil,
+            optionalConstraints: ["DtlsSrtpKeyAgreement": "true"]
+        )
+        
+        guard let pc = factory.peerConnection(
+            with: config,
+            constraints: constraints,
+            delegate: self
+        ) else {
+            throw WebRTCError.failedToCreatePeerConnection
+        }
+        
+        self.peerConnection = pc
+    }
+    
+    private func createDataChannel() {
+        let config = RTCDataChannelConfiguration()
+        config.isOrdered = true
+        
+        dataChannel = peerConnection?.dataChannel(forLabel: "oai-events", configuration: config)
+        dataChannel?.delegate = self
+    }
+    
+    private func addLocalAudioTrack() {
+        let audioConstraints = RTCMediaConstraints(
+            mandatoryConstraints: nil,
+            optionalConstraints: [
+                "googEchoCancellation": "true",
+                "googAutoGainControl": "true",
+                "googNoiseSuppression": "true",
+                "googHighpassFilter": "true"
+            ]
+        )
+        
+        let audioSource = factory.audioSource(with: audioConstraints)
+        let audioTrack = factory.audioTrack(with: audioSource, trackId: "audio0")
+        
+        peerConnection?.add(audioTrack, streamIds: ["stream0"])
+        self.localAudioTrack = audioTrack
+    }
+    
+    private func negotiateConnection(clientSecret: String) async throws {
+        guard let pc = peerConnection else {
+            throw WebRTCError.noPeerConnection
+        }
+        
+        // SDPオファーを作成
+        let constraints = RTCMediaConstraints(
+            mandatoryConstraints: [
+                "OfferToReceiveAudio": "true",
+                "OfferToReceiveVideo": "false"
+            ],
+            optionalConstraints: nil
+        )
+        
+        let offer = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RTCSessionDescription, Error>) in
+            pc.offer(for: constraints) { sdp, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else if let sdp = sdp {
+                    continuation.resume(returning: sdp)
+                } else {
+                    continuation.resume(throwing: WebRTCError.failedToCreateOffer)
+                }
+            }
+        }
+        
+        // ローカルディスクリプションを設定
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            pc.setLocalDescription(offer) { error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+        
+        // SDPをOpenAIに送信してアンサーを取得
+        let answerSDP = try await RealtimeService.shared.sendSDPOffer(
+            sdpOffer: offer.sdp,
+            clientSecret: clientSecret
+        )
+        
+        // リモートディスクリプションを設定
+        let answer = RTCSessionDescription(type: .answer, sdp: answerSDP)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            pc.setRemoteDescription(answer) { error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
     }
 }
 
-/// WebRTCクライアントのデリゲート
+// MARK: - RTCPeerConnectionDelegate
+
+extension WebRTCClient: RTCPeerConnectionDelegate {
+    func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {
+        print("[WebRTC] Signaling state: \(stateChanged.rawValue)")
+    }
+    
+    func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
+        print("[WebRTC] Stream added")
+        if let audioTrack = stream.audioTracks.first {
+            self.remoteAudioTrack = audioTrack
+            audioTrack.isEnabled = true
+        }
+    }
+    
+    func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {
+        print("[WebRTC] Stream removed")
+    }
+    
+    func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {
+        print("[WebRTC] Should negotiate")
+    }
+    
+    func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
+        print("[WebRTC] ICE connection state: \(newState.rawValue)")
+        
+        switch newState {
+        case .connected, .completed:
+            break
+        case .disconnected, .failed, .closed:
+            if isConnected {
+                isConnected = false
+                delegate?.webRTCClientDidDisconnect(self)
+            }
+        default:
+            break
+        }
+    }
+    
+    func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
+        print("[WebRTC] ICE gathering state: \(newState.rawValue)")
+    }
+    
+    func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
+        // OpenAI Realtime APIではICE candidateの送信は不要
+        print("[WebRTC] ICE candidate generated")
+    }
+    
+    func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {
+        print("[WebRTC] ICE candidates removed")
+    }
+    
+    func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
+        print("[WebRTC] Data channel opened: \(dataChannel.label)")
+        self.dataChannel = dataChannel
+        dataChannel.delegate = self
+    }
+}
+
+// MARK: - RTCDataChannelDelegate
+
+extension WebRTCClient: RTCDataChannelDelegate {
+    func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+        print("[WebRTC] Data channel state: \(dataChannel.readyState.rawValue)")
+    }
+    
+    func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
+        let data = buffer.data
+        
+        // JSONイベントをパース
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            delegate?.webRTCClient(self, didReceiveEvent: json)
+        } else {
+            delegate?.webRTCClient(self, didReceiveData: data)
+        }
+    }
+}
+
+// MARK: - WebRTCClientDelegate
+
 protocol WebRTCClientDelegate: AnyObject {
     func webRTCClient(_ client: WebRTCClient, didReceiveData data: Data)
     func webRTCClient(_ client: WebRTCClient, didReceiveEvent event: [String: Any])
     func webRTCClientDidConnect(_ client: WebRTCClient)
     func webRTCClientDidDisconnect(_ client: WebRTCClient)
     func webRTCClient(_ client: WebRTCClient, didEncounterError error: Error)
+}
+
+// MARK: - WebRTCError
+
+enum WebRTCError: Error, LocalizedError {
+    case failedToCreatePeerConnection
+    case noPeerConnection
+    case failedToCreateOffer
+    case connectionFailed
+    
+    var errorDescription: String? {
+        switch self {
+        case .failedToCreatePeerConnection:
+            return "PeerConnectionの作成に失敗しました"
+        case .noPeerConnection:
+            return "PeerConnectionが存在しません"
+        case .failedToCreateOffer:
+            return "SDPオファーの作成に失敗しました"
+        case .connectionFailed:
+            return Constants.ErrorMessage.connectionFailed
+        }
+    }
 }
