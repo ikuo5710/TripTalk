@@ -23,6 +23,7 @@ final class WebRTCClient: NSObject {
     
     private let factory: RTCPeerConnectionFactory
     private let audioSession = AVAudioSession.sharedInstance()
+    private let rtcAudioSession = RTCAudioSession.sharedInstance()
     
     private(set) var isConnected = false
     private var clientSecret: String?
@@ -149,14 +150,26 @@ final class WebRTCClient: NSObject {
     // MARK: - Private Methods
     
     private func configureAudioSession() throws {
+        // RTCAudioSessionを使用してWebRTCの音声設定を行う
+        rtcAudioSession.lockForConfiguration()
+        defer { rtcAudioSession.unlockForConfiguration() }
+        
+        // RTCAudioSessionの設定（useManualAudioをfalseにして自動管理）
+        rtcAudioSession.useManualAudio = false
+        rtcAudioSession.isAudioEnabled = true
+        
+        // AVAudioSessionで設定
         try audioSession.setCategory(
             .playAndRecord,
-            mode: .spokenAudio,  // スピーカー出力を優先
+            mode: .voiceChat,
             options: [.defaultToSpeaker, .allowBluetooth]
         )
-        // スピーカーに出力をルーティング（音量最大化）
         try audioSession.overrideOutputAudioPort(.speaker)
         try audioSession.setActive(true)
+        
+        // 出力音量を確認（デバッグ用）
+        print("[WebRTC] Output volume: \(audioSession.outputVolume)")
+        print("[WebRTC] Current route: \(audioSession.currentRoute.outputs)")
     }
     
     private func createPeerConnection() throws {
@@ -278,6 +291,22 @@ extension WebRTCClient: RTCPeerConnectionDelegate {
         if let audioTrack = stream.audioTracks.first {
             self.remoteAudioTrack = audioTrack
             audioTrack.isEnabled = true
+            
+            // リモートオーディオの音量を最大に設定
+            DispatchQueue.main.async {
+                self.configureAudioForPlayback()
+            }
+        }
+    }
+    
+    /// リモートオーディオ再生用の設定
+    private func configureAudioForPlayback() {
+        do {
+            // スピーカー出力を強制
+            try audioSession.overrideOutputAudioPort(.speaker)
+            print("[WebRTC] Audio output set to speaker")
+        } catch {
+            print("[WebRTC] Failed to override audio port: \(error)")
         }
     }
     
