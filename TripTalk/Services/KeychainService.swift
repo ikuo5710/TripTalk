@@ -59,8 +59,8 @@ final class KeychainService {
         return nil
     }
     
-    /// Keychainから直接APIキーを取得（内部用）
-    private func getAPIKeyFromKeychain() -> String? {
+    /// Keychainから直接APIキーを取得（設定画面用）
+    func getAPIKeyFromKeychain() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,

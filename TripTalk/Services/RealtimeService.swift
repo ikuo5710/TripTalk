@@ -143,6 +143,11 @@ final class RealtimeService {
                 throw RealtimeError.invalidResponse
             }
             
+            // デバッグ: レスポンスを出力
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("[RealtimeService] Response (\(httpResponse.statusCode)): \(responseString)")
+            }
+            
             if httpResponse.statusCode != 200 {
                 let errorMessage = String(data: data, encoding: .utf8)
                 throw RealtimeError.httpError(httpResponse.statusCode, errorMessage)
@@ -154,6 +159,7 @@ final class RealtimeService {
         } catch let error as RealtimeError {
             throw error
         } catch {
+            print("[RealtimeService] Decode error: \(error)")
             throw RealtimeError.networkError(error)
         }
     }

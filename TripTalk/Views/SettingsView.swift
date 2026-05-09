@@ -153,8 +153,8 @@ struct SettingsView: View {
     // MARK: - Methods
     
     private func loadSettings() {
-        savedAPIKey = KeychainService.shared.getAPIKey() ?? ""
-        // AppStorageで自動的に読み込まれる
+        // Keychainのみをチェック（.envは含まない）
+        savedAPIKey = KeychainService.shared.getAPIKeyFromKeychain() ?? ""
     }
     
     private func saveAPIKey() {
