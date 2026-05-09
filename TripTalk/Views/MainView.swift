@@ -11,6 +11,7 @@ import SwiftUI
 struct MainView: View {
     @State private var viewModel = TranslationViewModel()
     @State private var showSettings = false
+    @State private var showShareSheet = false
     
     var body: some View {
         NavigationStack {
@@ -76,6 +77,16 @@ struct MainView: View {
             .onAppear {
                 viewModel.checkAPIKeyAndShowSettingsIfNeeded(showSettings: $showSettings)
             }
+            .sheet(isPresented: $showShareSheet) {
+                ShareSheet(activityItems: [viewModel.allTranslationText])
+            }
+            .overlay(alignment: .top) {
+                if viewModel.showCopyConfirmation {
+                    CopyConfirmationToast()
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .animation(.easeInOut(duration: 0.3), value: viewModel.showCopyConfirmation)
+                }
+            }
         }
     }
     
@@ -96,12 +107,11 @@ struct MainView: View {
                 Image(systemName: "arrow.left.arrow.right")
                     .font(.title3)
                     .fontWeight(.medium)
-                    .foregroundStyle(viewModel.connectionState.isSessionActive ? .secondary : .primary)
+                    .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .background(Color(.secondarySystemBackground))
                     .clipShape(Circle())
             }
-            .disabled(viewModel.connectionState.isSessionActive)
             
             LanguagePicker(
                 title: "出力",
@@ -128,12 +138,50 @@ struct MainView: View {
             }
             .disabled(viewModel.translationEntries.isEmpty)
             
-            ShareLink(item: viewModel.allTranslationText) {
+            Button {
+                showShareSheet = true
+            } label: {
                 Image(systemName: "square.and.arrow.up")
             }
             .disabled(viewModel.translationEntries.isEmpty)
         }
     }
+}
+
+// MARK: - CopyConfirmationToast
+
+/// コピー完了通知トースト
+struct CopyConfirmationToast: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Text("コピーしました")
+                .font(.subheadline)
+                .fontWeight(.medium)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(Color(.secondarySystemBackground))
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+        )
+        .padding(.top, 60)
+    }
+}
+
+// MARK: - ShareSheet
+
+/// UIActivityViewControllerをSwiftUIで使用するためのラッパー
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {

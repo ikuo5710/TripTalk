@@ -34,6 +34,9 @@ class TranslationViewModel {
     /// マイク権限が必要なダイアログを表示
     var showMicrophonePermissionAlert: Bool = false
     
+    /// コピー完了通知を表示
+    var showCopyConfirmation: Bool = false
+    
     private var webRTCClient: WebRTCClient?
     private var currentTranscriptId: UUID?
     private var reconnectAttempts = 0
@@ -73,11 +76,18 @@ class TranslationViewModel {
     // MARK: - Computed Properties
     
     /// 全翻訳テキスト（コピー/共有用）
+    /// 区切り行の位置では空行を入れ、中間結果も含める（翻訳中でもコピー可能）
     var allTranslationText: String {
-        translationEntries
-            .filter { !$0.isSeparator && !$0.isIntermediate }
-            .map { $0.text }
-            .joined(separator: "\n")
+        var result: [String] = []
+        for entry in translationEntries {
+            if entry.isSeparator {
+                // 区切り行の位置で空行を追加
+                result.append("")
+            } else {
+                result.append(entry.text)
+            }
+        }
+        return result.joined(separator: "\n")
     }
     
     // MARK: - Public Methods
@@ -162,8 +172,12 @@ class TranslationViewModel {
         audioPlaybackTimer?.invalidate()
         audioPlaybackTimer = nil
         isPlayingAudio = false
+        
+        // delegateをクリアして切断（コールバックを防ぐ）
+        webRTCClient?.delegate = nil
         webRTCClient?.disconnect()
         webRTCClient = nil
+        
         connectionState = .idle
         translationEntries.removeAll()
         currentTranscriptId = nil
@@ -190,7 +204,14 @@ class TranslationViewModel {
             
             // セッション再作成
             Task {
+                // 古いクライアントのdelegateをクリアして切断（コールバックを防ぐ）
+                webRTCClient?.delegate = nil
                 webRTCClient?.disconnect()
+                webRTCClient = nil
+                
+                // 現在のトランスクリプトIDをリセット（新しい翻訳は新しいエントリに）
+                currentTranscriptId = nil
+                
                 connectionState = .connecting
                 await connectToRealtimeAPI()
             }
@@ -203,6 +224,15 @@ class TranslationViewModel {
     /// 全テキストをコピー
     func copyAllText() {
         UIPasteboard.general.string = allTranslationText
+        
+        // コピー完了通知を表示
+        showCopyConfirmation = true
+        
+        // 2秒後に通知を非表示
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            showCopyConfirmation = false
+        }
     }
     
     // MARK: - Private Methods
